@@ -35,7 +35,7 @@
 #include "hw/misc/unimp.h"
 #include "hw/char/pl011.h"
 
-/* TODO: you need include some header files */
+ /* TODO: you need include some header files */
 
 static const MemMapEntry g233_memmap[] = {
     [G233_DEV_MROM] =     {     0x1000,     0x2000 },
@@ -53,6 +53,15 @@ static void g233_soc_init(Object *obj)
      * You can add more devices here(e.g. cpu, gpio)
      * Attention: The cpu resetvec is 0x1004
      */
+    G233SoCState *s = RISCV_G233_SOC(obj);
+    /* 创建CPU集群 */
+    object_initialize_child(obj, "cpus", &s->cpus, TYPE_RISCV_HART_ARRAY);
+    qdev_prop_set_uint32(DEVICE(&s->cpus), "num-harts", 1);
+    qdev_prop_set_uint32(DEVICE(&s->cpus), "hartid-base", 0);
+    qdev_prop_set_string(DEVICE(&s->cpus), "cpu-type", TYPE_RISCV_CPU_GEVICO_G233);
+    qdev_prop_set_uint64(DEVICE(&s->cpus), "resetvec", 0x1004);
+    /* 创建gpio */
+    object_initialize_child(obj, "gpio", &s->gpio, TYPE_SIFIVE_GPIO);
 }
 
 static void g233_soc_realize(DeviceState *dev, Error **errp)
@@ -63,6 +72,7 @@ static void g233_soc_realize(DeviceState *dev, Error **errp)
     const MemMapEntry *memmap = g233_memmap;
 
     /* CPUs realize */
+    sysbus_realize(SYS_BUS_DEVICE(&s->cpus), &error_fatal);
 
     /* Mask ROM */
     memory_region_init_rom(&s->mask_rom, OBJECT(dev), "riscv.g233.mrom",
@@ -83,7 +93,7 @@ static void g233_soc_realize(DeviceState *dev, Error **errp)
                                  G233_PLIC_CONTEXT_STRIDE,
                                  memmap[G233_DEV_PLIC].size);
     riscv_aclint_swi_create(memmap[G233_DEV_CLINT].base,
-                            0, ms->smp.cpus, false);
+        0, ms->smp.cpus, false);
     riscv_aclint_mtimer_create(memmap[G233_DEV_CLINT].base +
                                RISCV_ACLINT_SWI_SIZE,
                                RISCV_ACLINT_DEFAULT_MTIMER_SIZE,
@@ -160,9 +170,12 @@ static void g233_machine_init(MachineState *machine)
     }
 
     /* Initialize SoC */
-
+    object_initialize_child(OBJECT(machine), "soc", &s->soc, TYPE_RISCV_G233_SOC);
+    qdev_realize(DEVICE(&s->soc), NULL, &error_fatal);
 
     /* Data Memory(DDR RAM) */
+    memory_region_add_subregion(get_system_memory(), memmap[G233_DEV_DRAM].base,
+        machine->ram);
 
     /* Mask ROM reset vector */
     uint32_t reset_vec[5];
