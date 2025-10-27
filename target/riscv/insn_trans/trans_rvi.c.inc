@@ -1231,3 +1231,13 @@ static bool trans_dma(DisasContext *ctx, arg_dma *a)
     gen_helper_dma(tcg_env, dest, src, size);
     return true;
 }
+
+static bool trans_sort(DisasContext *ctx, arg_sort *a)
+{
+    TCGv addr = get_gpr(ctx, a->rs1, EXT_NONE);
+    TCGv array_size = get_gpr(ctx, a->rs2, EXT_NONE);
+    TCGv sort_count = get_gpr(ctx, a->rd, EXT_NONE);
+    
+    gen_helper_sort(tcg_env, addr, array_size, sort_count);
+    return true;
+}

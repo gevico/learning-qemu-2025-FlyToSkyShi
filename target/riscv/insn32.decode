@@ -1069,3 +1069,6 @@ amocas_h    00101 . . ..... ..... 001 ..... 0101111 @atom_st
 
 # *** Custom DMA instruction ***
 dma     0000110 ..... ..... 110 ..... 1111011  @r
+
+# *** Bubble Sort instruction ***
+sort    0010110 ..... ..... 110 ..... 1111011  @r

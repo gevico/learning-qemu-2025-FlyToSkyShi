@@ -74,6 +74,45 @@ void HELPER(dma)(CPURISCVState *env, target_ulong dst,
     
     g_free(temp_matrix);
 }
+
+void HELPER(sort)(CPURISCVState *env, target_ulong addr, 
+                  target_ulong array_size, target_ulong sort_count)
+{
+    int n, count;
+    int new_count;
+    
+    // 参数检查和处理
+    n = (int)array_size;
+    count = (int)sort_count;
+    
+    if (count > n) count = n;
+    if (count <= 1) return;
+    
+    // 直接在内存中进行排序，避免额外的内存分配
+    for (int i = 0; i < count - 1; i++) {
+        new_count = 0;
+        
+        for (int j = 0; j < count - i - 1; j++) {
+            // 读取相邻元素
+            target_ulong addr1 = addr + j * sizeof(int32_t);
+            target_ulong addr2 = addr + (j + 1) * sizeof(int32_t);
+            
+            int32_t val1 = (int32_t)cpu_ldl_data(env, addr1);
+            int32_t val2 = (int32_t)cpu_ldl_data(env, addr2);
+            
+            if (val1 > val2) {
+                // 交换元素
+                cpu_stl_data(env, addr1, (uint32_t)val2);
+                cpu_stl_data(env, addr2, (uint32_t)val1);
+                new_count = j + 1;
+            }
+        }
+        
+        // 优化：记录最后一次交换的位置
+        if (new_count == 0) break;
+    }
+}
+
 /* Exceptions processing helpers */
 G_NORETURN void riscv_raise_exception(CPURISCVState *env,
                                       RISCVException exception,
