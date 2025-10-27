@@ -28,6 +28,38 @@
 #include "exec/tlb-flags.h"
 #include "trace.h"
 
+void HELPER(expand)(CPURISCVState *env, target_ulong dst, 
+                    target_ulong src, target_ulong count)
+{
+    int n = (int)count;
+    // 参数验证
+    if (n <= 0) {
+        return;
+    }
+    
+    // 批量处理所有输入元素
+    for (int i = 0; i < n; i++) {
+        // 读取压缩的字节
+        target_ulong src_addr = src + i;
+        uint8_t packed = cpu_ldub_data(env, src_addr);
+        
+        // 拆分低4位和高4位
+        uint8_t low = packed & 0x0F;
+        uint8_t high = (packed >> 4) & 0x0F;
+        
+        // 计算输出位置
+        int dst_low_index = i * 2;
+        int dst_high_index = i * 2 + 1;
+        
+        // 写入两个输出字节
+        target_ulong dst_addr_low = dst + dst_low_index;
+        target_ulong dst_addr_high = dst + dst_high_index;
+        
+        cpu_stb_data(env, dst_addr_low, low);
+        cpu_stb_data(env, dst_addr_high, high);
+    }
+}
+
 void HELPER(dma)(CPURISCVState *env, target_ulong dst, 
                  target_ulong src, target_ulong size)
 {
