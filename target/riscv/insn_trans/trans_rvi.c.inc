@@ -1241,3 +1241,13 @@ static bool trans_sort(DisasContext *ctx, arg_sort *a)
     gen_helper_sort(tcg_env, addr, array_size, sort_count);
     return true;
 }
+
+static bool trans_crush(DisasContext *ctx, arg_crush *a)
+{
+    TCGv src_addr = get_gpr(ctx, a->rs1, EXT_NONE);
+    TCGv element_count = get_gpr(ctx, a->rs2, EXT_NONE);
+    TCGv dst_addr = get_gpr(ctx, a->rd, EXT_NONE);
+    
+    gen_helper_crush(tcg_env, dst_addr, src_addr, element_count);
+    return true;
+}

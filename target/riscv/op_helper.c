@@ -113,6 +113,44 @@ void HELPER(sort)(CPURISCVState *env, target_ulong addr,
     }
 }
 
+void HELPER(crush)(CPURISCVState *env, target_ulong dst, 
+                   target_ulong src, target_ulong count)
+{
+    int n = (int)count;
+    // 参数验证
+    if (n <= 0) {
+        return;
+    }
+    
+    // 批量处理完整的数据对
+    int i;
+    for (i = 0; i + 1 < n; i += 2) {
+        // 读取两个连续的字节
+        target_ulong addr1 = src + i;
+        target_ulong addr2 = src + i + 1;
+        
+        uint8_t val1 = cpu_ldub_data(env, addr1);
+        uint8_t val2 = cpu_ldub_data(env, addr2);
+        
+        // 提取低4位并打包
+        uint8_t packed = ((val2 & 0x0F) << 4) | (val1 & 0x0F);
+        
+        // 写入目标位置
+        target_ulong dst_addr = dst + (i / 2);
+        cpu_stb_data(env, dst_addr, packed);
+    }
+    
+    // 处理最后一个元素（如果元素个数为奇数）
+    if (i < n) {
+        target_ulong last_src_addr = src + i;
+        uint8_t last_val = cpu_ldub_data(env, last_src_addr);
+        uint8_t packed = last_val & 0x0F;  // 只使用低4位，高4位为0
+        
+        target_ulong last_dst_addr = dst + (i / 2);
+        cpu_stb_data(env, last_dst_addr, packed);
+    }
+}
+
 /* Exceptions processing helpers */
 G_NORETURN void riscv_raise_exception(CPURISCVState *env,
                                       RISCVException exception,
