@@ -28,6 +28,52 @@
 #include "exec/tlb-flags.h"
 #include "trace.h"
 
+void HELPER(dma)(CPURISCVState *env, target_ulong dst, 
+                 target_ulong src, target_ulong size)
+{
+    int n;
+    
+    // 根据rs2确定矩阵规模
+    switch (size) {
+    case 0:
+        n = 8;  // 8x8
+        break;
+    case 1:
+        n = 16; // 16x16
+        break;
+    case 2:
+        n = 32; // 32x32
+        break;
+    default:
+        // 无效的规模参数，静默失败
+        return;
+    }
+    
+    // 为转置后的矩阵分配临时内存
+    uint32_t *temp_matrix = g_malloc(n * n * sizeof(uint32_t));
+    
+    // 从源地址读取矩阵数据并转置
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            // 读取源矩阵(i,j)位置的FP32数据
+            target_ulong src_addr = src + (i * n + j) * sizeof(uint32_t);
+            uint32_t val = cpu_ldl_data(env, src_addr);
+            
+            // 转置：目标矩阵(j,i) = 源矩阵(i,j)
+            temp_matrix[j * n + i] = val;
+        }
+    }
+    
+    // 将转置后的数据写入目标地址
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            target_ulong dst_addr = dst + (i * n + j) * sizeof(uint32_t);
+            cpu_stl_data(env, dst_addr, temp_matrix[i * n + j]);
+        }
+    }
+    
+    g_free(temp_matrix);
+}
 /* Exceptions processing helpers */
 G_NORETURN void riscv_raise_exception(CPURISCVState *env,
                                       RISCVException exception,
