@@ -34,7 +34,9 @@
 #include "hw/intc/sifive_plic.h"
 #include "hw/misc/unimp.h"
 #include "hw/char/pl011.h"
-
+#include "hw/ssi/ssi.h"
+#include "system/block-backend.h"
+#include "block/block-global-state.h"
  /* TODO: you need include some header files */
 
 static const MemMapEntry g233_memmap[] = {
@@ -44,6 +46,7 @@ static const MemMapEntry g233_memmap[] = {
     [G233_DEV_UART0] =    { 0x10000000,     0x1000 },
     [G233_DEV_GPIO0] =    { 0x10012000,     0x1000 },
     [G233_DEV_PWM0] =     { 0x10015000,     0x1000 },
+    [G233_DEV_SPI0]  =    { 0x10018000,     0x1000 },
     [G233_DEV_DRAM] =     { 0x80000000, 0x40000000 },
 };
 
@@ -62,6 +65,8 @@ static void g233_soc_init(Object *obj)
     qdev_prop_set_uint64(DEVICE(&s->cpus), "resetvec", 0x1004);
     /* 创建gpio */
     object_initialize_child(obj, "gpio", &s->gpio, TYPE_SIFIVE_GPIO);
+    /* 创建SPI */
+    object_initialize_child(obj, "spi", &s->spi, TYPE_G233_SPI);
 }
 
 static void g233_soc_realize(DeviceState *dev, Error **errp)
@@ -128,6 +133,11 @@ static void g233_soc_realize(DeviceState *dev, Error **errp)
     /* SiFive.PWM0 */
     create_unimplemented_device("riscv.g233.pwm0",
         memmap[G233_DEV_PWM0].base, memmap[G233_DEV_PWM0].size);
+
+        /* SPI realize */
+    sysbus_realize(SYS_BUS_DEVICE(&s->spi), &error_fatal);
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->spi), 0, memmap[G233_DEV_SPI0].base);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->spi), 0, qdev_get_gpio_in(DEVICE(s->plic), G233_SPI0_IRQ));
 
 }
 
@@ -197,6 +207,27 @@ static void g233_machine_init(MachineState *machine)
                           memmap[G233_DEV_DRAM].base,
                           false, NULL);
     }
+    
+    DeviceState *flash0, *flash1;
+    BlockBackend *blk0, *blk1;
+    qemu_irq flash0_cs, flash1_cs;
+
+    /* Connect Flash0 to SPI */
+    flash0 = qdev_new("w25x16");
+    blk0 = blk_by_name("flash0");
+    qdev_prop_set_drive_err(flash0, "drive", blk0, &error_fatal);
+    qdev_prop_set_uint8(flash0, "cs", 0);
+    qdev_realize_and_unref(flash0, BUS(s->soc.spi.ssi), &error_fatal);
+    flash0_cs = qdev_get_gpio_in_named(flash0, SSI_GPIO_CS, 0);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->soc.spi), 0 + 1, flash0_cs);
+
+    flash1 = qdev_new("w25x32");
+    blk1 = blk_by_name("flash1");
+    qdev_prop_set_drive_err(flash1, "drive", blk1, &error_fatal);
+    qdev_prop_set_uint8(flash1, "cs", 1);
+    qdev_realize_and_unref(flash1, BUS(s->soc.spi.ssi), &error_fatal);
+    flash1_cs = qdev_get_gpio_in_named(flash1, SSI_GPIO_CS, 0);
+    sysbus_connect_irq(SYS_BUS_DEVICE(&s->soc.spi), 0 + 2, flash1_cs);
 }
 
 static void g233_machine_instance_init(Object *obj)
